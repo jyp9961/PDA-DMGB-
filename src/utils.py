@@ -47,7 +47,7 @@ def set_seed_everywhere(seed):
 def write_info(args, fp):
     data = {
         'timestamp': str(datetime.now()),
-        'git': subprocess.check_output(["git", "describe", "--always"]).strip().decode(),
+        #'git': subprocess.check_output(["git", "describe", "--always"]).strip().decode(),
         'args': vars(args)
     }
     with open(fp, 'w') as f:
@@ -105,6 +105,8 @@ class ReplayBuffer(object):
         self.idx = 0
         self.full = False
 
+        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
     def add(self, obs, action, reward, next_obs, done):
         obses = (obs, next_obs)
         if self.idx >= len(self._obses):
@@ -136,17 +138,17 @@ class ReplayBuffer(object):
     def sample_soda(self, n=None):
         idxs = self._get_idxs(n)
         obs, _ = self._encode_obses(idxs)
-        return torch.as_tensor(obs).cuda().float()
+        return torch.as_tensor(obs).to(self.device).float()
 
     def __sample__(self, n=None):
         idxs = self._get_idxs(n)
 
         obs, next_obs = self._encode_obses(idxs)
-        obs = torch.as_tensor(obs).cuda().float()
-        next_obs = torch.as_tensor(next_obs).cuda().float()
-        actions = torch.as_tensor(self.actions[idxs]).cuda()
-        rewards = torch.as_tensor(self.rewards[idxs]).cuda()
-        not_dones = torch.as_tensor(self.not_dones[idxs]).cuda()
+        obs = torch.as_tensor(obs).to(self.device).float()
+        next_obs = torch.as_tensor(next_obs).to(self.device).float()
+        actions = torch.as_tensor(self.actions[idxs]).to(self.device)
+        rewards = torch.as_tensor(self.rewards[idxs]).to(self.device)
+        not_dones = torch.as_tensor(self.not_dones[idxs]).to(self.device)
 
         return obs, actions, rewards, next_obs, not_dones
 
@@ -167,9 +169,26 @@ class ReplayBuffer(object):
 
     def sample_svea(self, n=None, pad=4):
         obs, actions, rewards, next_obs, not_dones = self.__sample__(n=n)
+        original_obs = obs.clone()
         obs = augmentations.random_shift(obs, pad)
 
-        return obs, actions, rewards, next_obs, not_dones
+        return original_obs, obs, actions, rewards, next_obs, not_dones
+
+    def sample_pda(self, n=None, pad=4, da='random_conv'):
+        obs, actions, rewards, next_obs, not_dones = self.__sample__(n=n)
+        original_obs = obs.clone()
+        obs_aug1 = augmentations.random_shift(obs, pad)
+        obs_aug2 = augmentations.random_shift(obs, pad)
+        next_obs_aug1 = augmentations.random_shift(next_obs, pad)
+        next_obs_aug2 = augmentations.random_shift(next_obs, pad)
+        if da == 'random_conv':
+            obs_DA = augmentations.random_conv(obs.clone())
+        if da == 'random_overlay':
+            imgs = augmentations.random_overlay(obs.clone(), return_imgs=True)
+            alpha = 0.5
+            obs_DA = ((1-alpha)*(obs_aug1/255.) + (alpha)*imgs)*255.
+
+        return original_obs, obs_aug1, obs_aug2, imgs, obs_DA, actions, rewards, next_obs, next_obs_aug1, next_obs_aug2, not_dones
 
     def sample(self, n=None):
         obs, actions, rewards, next_obs, not_dones = self.__sample__(n=n)

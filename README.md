@@ -1,7 +1,8 @@
-# DMControl Generalization Benchmark
+# Implementation of Principled Data Augmentation (PDA) in DMControl Generalization Benchmark.
+
+TODO: write this file
 
 **[07/01/2021] Added SVEA, DrQ, Distracting Control Suite, and reduced memory consumption by 5x**
-
 
 Benchmark for generalization in continuous control from pixels, based on [DMControl](https://github.com/deepmind/dm_control).
 

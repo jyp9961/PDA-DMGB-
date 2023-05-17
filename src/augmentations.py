@@ -1,4 +1,5 @@
 import numpy as np
+import time
 import torch
 import torch.nn.functional as F
 import torchvision.transforms as TF
@@ -12,13 +13,15 @@ places_dataloader = None
 places_iter = None
 
 
-def _load_places(batch_size=256, image_size=84, num_workers=16, use_val=False):
+def _load_places(batch_size=128, image_size=84, num_workers=10, use_val=False):
 	global places_dataloader, places_iter
+	load_start = time.time()
 	partition = 'val' if use_val else 'train'
 	print(f'Loading {partition} partition of places365_standard...')
 	for data_dir in utils.load_config('datasets'):
 		if os.path.exists(data_dir):
 			fp = os.path.join(data_dir, 'places365_standard', partition)
+			print('{} exists: {}'.format(fp, os.path.exists(fp)))
 			if not os.path.exists(fp):
 				print(f'Warning: path {fp} does not exist, falling back to {data_dir}')
 				fp = data_dir
@@ -31,11 +34,10 @@ def _load_places(batch_size=256, image_size=84, num_workers=16, use_val=False):
 				batch_size=batch_size, shuffle=True,
 				num_workers=num_workers, pin_memory=True)
 			places_iter = iter(places_dataloader)
+			print('Create dataset from {} load_time {:.3f} num_samples {}'.format(fp, time.time()-load_start, len(places_dataloader)*batch_size))
 			break
 	if places_iter is None:
 		raise FileNotFoundError('failed to find places365 data at any of the specified paths')
-	print('Loaded dataset from', data_dir)
-
 
 def _get_places_batch(batch_size):
 	global places_iter
@@ -50,7 +52,7 @@ def _get_places_batch(batch_size):
 	return imgs.cuda()
 
 
-def random_overlay(x, dataset='places365_standard'):
+def random_overlay(x, dataset='places365_standard', return_imgs=False):
 	"""Randomly overlay an image from Places"""
 	global places_iter
 	alpha = 0.5
@@ -62,8 +64,13 @@ def random_overlay(x, dataset='places365_standard'):
 	else:
 		raise NotImplementedError(f'overlay has not been implemented for dataset "{dataset}"')
 
-	return ((1-alpha)*(x/255.) + (alpha)*imgs)*255.
-
+	# x: [0, 255]
+	# imgs: [0, 1]
+	#print(imgs.shape)
+	if return_imgs:
+		return imgs
+	else:
+		return ((1-alpha)*(x/255.) + (alpha)*imgs)*255.
 
 def random_conv(x):
 	"""Applies a random conv2d, deviates slightly from https://arxiv.org/abs/1910.05396"""

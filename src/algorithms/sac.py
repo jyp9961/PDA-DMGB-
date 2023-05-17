@@ -9,14 +9,16 @@ import algorithms.modules as m
 
 class SAC(object):
 	def __init__(self, obs_shape, action_shape, args):
+		self.args = args
 		self.discount = args.discount
 		self.critic_tau = args.critic_tau
 		self.encoder_tau = args.encoder_tau
 		self.actor_update_freq = args.actor_update_freq
 		self.critic_target_update_freq = args.critic_target_update_freq
 
-		shared_cnn = m.SharedCNN(obs_shape, args.num_shared_layers, args.num_filters).cuda()
-		head_cnn = m.HeadCNN(shared_cnn.out_shape, args.num_head_layers, args.num_filters).cuda()
+		self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+		shared_cnn = m.SharedCNN(obs_shape, args.num_shared_layers, args.num_filters).to(self.device)
+		head_cnn = m.HeadCNN(shared_cnn.out_shape, args.num_head_layers, args.num_filters).to(self.device)
 		actor_encoder = m.Encoder(
 			shared_cnn,
 			head_cnn,
@@ -28,11 +30,11 @@ class SAC(object):
 			m.RLProjection(head_cnn.out_shape, args.projection_dim)
 		)
 
-		self.actor = m.Actor(actor_encoder, action_shape, args.hidden_dim, args.actor_log_std_min, args.actor_log_std_max).cuda()
-		self.critic = m.Critic(critic_encoder, action_shape, args.hidden_dim).cuda()
+		self.actor = m.Actor(actor_encoder, action_shape, args.hidden_dim, args.actor_log_std_min, args.actor_log_std_max).to(self.device)
+		self.critic = m.Critic(critic_encoder, action_shape, args.hidden_dim).to(self.device)
 		self.critic_target = deepcopy(self.critic)
 
-		self.log_alpha = torch.tensor(np.log(args.init_temperature)).cuda()
+		self.log_alpha = torch.tensor(np.log(args.init_temperature)).to(self.device)
 		self.log_alpha.requires_grad = True
 		self.target_entropy = -np.prod(action_shape)
 
@@ -66,7 +68,7 @@ class SAC(object):
 			_obs = np.array(obs)
 		else:
 			_obs = obs
-		_obs = torch.FloatTensor(_obs).cuda()
+		_obs = torch.FloatTensor(_obs).to(self.device)
 		_obs = _obs.unsqueeze(0)
 		return _obs
 
